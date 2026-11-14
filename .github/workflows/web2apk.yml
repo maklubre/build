@@ -9,8 +9,11 @@ on:
       app_name:
         description: 'Nama Aplikasi'
         required: true
-      icon_url:
-        description: 'Icon Url'
+      package_name:
+        description: 'Package Name (contoh: com.nted.app)'
+        required: true
+      icon_base64:
+        description: 'Icon (base64 PNG)'
         required: true
 
 jobs:
@@ -33,8 +36,8 @@ jobs:
       - name: Create Flutter Project
         run: |
           APP_NAME="${{ github.event.inputs.app_name }}"
-          PKG=$(echo "$APP_NAME" | tr '[:upper:]' '[:lower:]' | tr ' ' '_' | tr -cd '[:alnum:]_')
-          flutter create --org com.webapk --project-name "$PKG" myapp
+          PKG="${{ github.event.inputs.package_name }}"
+          flutter create --org "$PKG" --project-name "$(echo "$PKG" | awk -F. '{print $NF}')" myapp
 
       - name: Add Assets and Dependencies
         run: |
@@ -444,11 +447,7 @@ jobs:
           mkdir -p myapp/assets/icon
           sudo apt-get install -y imagemagick
 
-          curl -L \
-            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
-            -H "Accept: application/octet-stream" \
-            "${{ github.event.inputs.icon_url }}" \
-            -o myapp/assets/icon/icon_raw
+          echo "${{ github.event.inputs.icon_base64 }}" | base64 -d > myapp/assets/icon/icon_raw
 
           convert myapp/assets/icon/icon_raw \
             -background transparent \
@@ -475,7 +474,32 @@ jobs:
       - name: Disable Lint for Release
         run: |
           cd myapp/android/app
-          sed -i '/^android {/a\    lintOptions {\n        checkReleaseBuilds false\n        abortOnError false\n    }' build.gradle
+          if [ -f build.gradle.kts ]; then
+            echo "Detected build.gradle.kts (Kotlin DSL)"
+            python3 - <<'PY'
+          import re
+          p = "build.gradle.kts"
+          s = open(p).read()
+          if "lint {" not in s:
+              s = re.sub(r'android\s*\{', 'android {\n    lint {\n        checkReleaseBuilds = false\n        abortOnError = false\n    }\n', s, count=1)
+              open(p, "w").write(s)
+              print("Patched build.gradle.kts")
+          else:
+              print("lint block already exists, skipping")
+          PY
+          elif [ -f build.gradle ]; then
+            echo "Detected build.gradle (Groovy DSL)"
+            if ! grep -q "lintOptions" build.gradle; then
+              sed -i '/android {/a\    lintOptions {\n        checkReleaseBuilds false\n        abortOnError false\n    }' build.gradle
+              echo "Patched build.gradle"
+            else
+              echo "lintOptions already exists, skipping"
+            fi
+          else
+            echo "No build.gradle(.kts) found, listing:"
+            ls -la
+            exit 1
+          fi
 
       - name: Build APK
         run: |
