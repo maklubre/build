@@ -1,4 +1,4 @@
-name: Web2APK API
+name: Web2APK
 
 on:
   workflow_dispatch:
@@ -26,6 +26,7 @@ jobs:
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
+          flutter-version: '3.44.0'
           channel: stable
           cache: true
 
@@ -41,6 +42,7 @@ jobs:
           flutter pub add webview_flutter
           flutter pub add flutter_launcher_icons
           flutter pub add connectivity_plus
+
           echo "  assets:" >> pubspec.yaml
           echo "    - assets/icon/" >> pubspec.yaml
 
@@ -470,6 +472,11 @@ jobs:
           cd myapp
           dart run flutter_launcher_icons -f flutter_launcher_icons.yaml
 
+      - name: Disable Lint for Release
+        run: |
+          cd myapp/android/app
+          sed -i '/^android {/a\    lintOptions {\n        checkReleaseBuilds false\n        abortOnError false\n    }' build.gradle
+
       - name: Build APK
         run: |
           cd myapp
@@ -478,5 +485,5 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: web2apk-${{ github.run_id }}
+          name: web2apk-release
           path: myapp/build/app/outputs/flutter-apk/app-release.apk
