@@ -12,8 +12,8 @@ on:
       package_name:
         description: 'Package Name (contoh: com.nted.app)'
         required: true
-      icon_base64:
-        description: 'Icon (base64 PNG)'
+      icon_url:
+        description: 'Icon URL (GitHub Release asset)'
         required: true
 
 jobs:
@@ -447,7 +447,11 @@ jobs:
           mkdir -p myapp/assets/icon
           sudo apt-get install -y imagemagick
 
-          echo "${{ github.event.inputs.icon_base64 }}" | base64 -d > myapp/assets/icon/icon_raw
+          curl -L \
+            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Accept: application/octet-stream" \
+            "${{ github.event.inputs.icon_url }}" \
+            -o myapp/assets/icon/icon_raw
 
           convert myapp/assets/icon/icon_raw \
             -background transparent \
